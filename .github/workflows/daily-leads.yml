@@ -1,0 +1,35 @@
+name: Daily Lead Generation
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  generate-leads:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run lead generation
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
+        run: python main.py
+
+      - name: Commit updated state.json and city cache
+        run: |
+          git config --global user.name "lead-gen-bot"
+          git config --global user.email "actions@github.com"
+          git add state.json city_coords_cache.json
+          git diff --staged --quiet || git commit -m "Update state after daily run"
+          git push
