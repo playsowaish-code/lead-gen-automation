@@ -4,14 +4,30 @@ Free replacement for Google Places — queries OpenStreetMap business data
 via the Overpass API. No API key, no billing, no cost, ever.
 
 Docs: https://wiki.openstreetmap.org/wiki/Overpass_API
-Public endpoint has a shared rate limit, so we keep requests modest and
-add a small delay between calls to be a good citizen.
+
+NOTE (2026): the main overpass-api.de endpoint has been aggressively
+rate-limiting/blocking requests that look "bot-like" (missing a real
+User-Agent/Accept headers) due to a wave of AI-scraper traffic. We send
+proper headers, and if a server still rejects us (406/429/5xx), we
+automatically fall back to a list of alternate public Overpass mirrors.
 """
 
 import time
 import requests
 
-OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+    "https://overpass.openstreetmap.ru/api/interpreter",
+]
+
+HEADERS = {
+    "User-Agent": "LeadGenAutomation/1.0 (personal project; contact: set-your-email-here)",
+    "Accept": "application/json",
+    "Accept-Language": "en",
+    "Content-Type": "application/x-www-form-urlencoded",
+}
 
 
 def build_query(tag_pairs: list, lat: float, lon: float, radius_meters: int) -> str:
@@ -35,29 +51,42 @@ out center tags 60;
 """
 
 
+def _query_endpoint(url: str, query: str):
+    """Tries one endpoint. Returns parsed JSON dict on success, None on failure."""
+    try:
+        resp = requests.post(url, data={"data": query}, headers=HEADERS, timeout=40)
+    except requests.exceptions.RequestException as e:
+        print(f"  [!] {url} request failed: {e}")
+        return None
+
+    if resp.status_code != 200:
+        print(f"  [!] {url} returned {resp.status_code}: {resp.text[:150]}")
+        return None
+
+    try:
+        return resp.json()
+    except ValueError:
+        print(f"  [!] {url} returned non-JSON response")
+        return None
+
+
 def search_businesses(tag_pairs: list, lat: float, lon: float, radius_meters: int) -> list:
     """
     Returns a list of normalized business dicts:
       { name, phone, website, address, osm_id }
+    Tries each Overpass mirror in order until one responds successfully.
     """
     query = build_query(tag_pairs, lat, lon, radius_meters)
 
-    try:
-        resp = requests.post(OVERPASS_URL, data={"data": query}, timeout=40)
-    except requests.exceptions.RequestException as e:
-        print(f"  [!] Overpass request failed: {e}")
-        return []
+    data = None
+    for endpoint in OVERPASS_ENDPOINTS:
+        data = _query_endpoint(endpoint, query)
+        time.sleep(1.5)
+        if data is not None:
+            break
 
-    time.sleep(1.5)  # be polite to the shared free endpoint
-
-    if resp.status_code != 200:
-        print(f"  [!] Overpass API error {resp.status_code}: {resp.text[:300]}")
-        return []
-
-    try:
-        data = resp.json()
-    except ValueError:
-        print("  [!] Overpass returned non-JSON response")
+    if data is None:
+        print("  [!] All Overpass endpoints failed for this query — skipping")
         return []
 
     businesses = []
@@ -65,9 +94,8 @@ def search_businesses(tag_pairs: list, lat: float, lon: float, radius_meters: in
         tags = el.get("tags", {})
         name = tags.get("name")
         if not name:
-            continue  # skip unnamed entries, not useful as leads
+            continue
 
-        # Build a rough address from whatever OSM address tags exist
         addr_parts = [
             tags.get("addr:housenumber", ""),
             tags.get("addr:street", ""),
