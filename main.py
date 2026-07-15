@@ -98,13 +98,17 @@ def main():
             result = check_website(biz["website"], config)
 
             if result["status"] in ("no_website", "poor_website"):
+                phone = result.get("phone") or biz["phone"]
+                email = result.get("email") or ""
+
                 collected.append({
                     "place_id": biz["osm_id"],
                     "business_name": biz["name"],
                     "category": category_name,
                     "city": city,
                     "country": country,
-                    "phone": biz["phone"],
+                    "phone": phone,
+                    "email": email,
                     "website": biz["website"] or "(none)",
                     "lead_type": result["status"],
                     "reasons": "; ".join(result["reasons"]),
