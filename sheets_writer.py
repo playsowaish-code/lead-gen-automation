@@ -21,7 +21,7 @@ SCOPES = [
 
 LEADS_HEADER = [
     "Date Added", "Business Name", "Category", "City", "Country",
-    "Phone", "Website", "Lead Type", "Reasons", "Address", "Place ID",
+    "Phone", "Email", "Website", "Lead Type", "Reasons", "Address", "Place ID",
 ]
 
 
@@ -42,7 +42,7 @@ def get_or_create_worksheet(sheet, title: str, header: list):
 
 def load_seen_ids(seen_ws) -> set:
     values = seen_ws.col_values(1)
-    return set(values[1:])  # skip header
+    return set(values[1:])
 
 
 def write_leads(sheet_id: str, service_account_json_str: str, new_leads: list, run_date: str):
@@ -74,6 +74,7 @@ def write_leads(sheet_id: str, service_account_json_str: str, new_leads: list, r
             lead["city"],
             lead["country"],
             lead["phone"],
+            lead.get("email", ""),
             lead["website"],
             lead["lead_type"],
             lead["reasons"],
