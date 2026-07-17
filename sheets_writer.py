@@ -86,7 +86,6 @@ def write_leads(sheet_id: str, service_account_json_str: str, new_leads: list, r
         written += 1
 
     if rows_to_append:
-        leads_ws.append_rows(rows_to_append, value_input_option="USER_ENTERED")
-        seen_ws.append_rows(seen_rows_to_append, value_input_option="USER_ENTERED")
-
+        leads_ws.append_rows(rows_to_append, value_input_option="RAW")
+        seen_ws.append_rows(seen_rows_to_append, value_input_option="RAW")
     return written
